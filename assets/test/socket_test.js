@@ -23,6 +23,7 @@ describe("constructor", () => {
     assert.equal(socket.channels.length, 0)
     assert.equal(socket.sendBuffer.length, 0)
     assert.equal(socket.ref, 0)
+    assert.equal(socket.messageCallbackRef, 0)
     assert.equal(socket.endPoint, "/socket/websocket")
     assert.deepEqual(socket.stateChangeCallbacks, {open: [], close: [], error: [], message: []})
     assert.equal(socket.transport, LongPoll)
@@ -788,6 +789,51 @@ describe("onConnMessage", () => {
       "ref": "ref",
       "join_ref": null
     }))
+  })
+})
+
+describe("onMessage", () => {
+  it("generates unique refs for callbacks", () => {
+    const ref1 = socket.onMessage(() => 0)
+    const ref2 = socket.onMessage(() => 0)
+    assert.equal(ref1 + 1, ref2)
+  })
+})
+
+describe("clearMessage", () => {
+  let mockServer
+
+  before(() => {
+    mockServer = new WebSocketServer('wss://example.com/')
+  })
+
+  after((done) => {
+    mockServer.stop(() => {
+      window.WebSocket = null
+      done()
+    })
+  })
+
+  beforeEach(() => {
+    socket = new Socket("/socket", {
+      reconnectAfterMs: () => 100000
+    })
+    socket.connect()
+  })
+
+  it("removes callback by its ref", () => {
+    const message = {"topic":"topic","event":"event","payload":"payload","ref":"ref"}
+    const spy1 = sinon.spy()
+    const spy2 = sinon.spy()
+
+    const ref1 = socket.onMessage(spy1)
+    const ref2 = socket.onMessage(spy2)
+
+    socket.clearMessage(ref1)
+    socket.onConnMessage({data: encode(message)})
+
+    assert.ok(!spy1.called)
+    assert.ok(spy2.called)
   })
 })
 

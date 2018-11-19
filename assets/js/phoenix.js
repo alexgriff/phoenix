@@ -711,6 +711,7 @@ export class Socket {
     this.channels             = []
     this.sendBuffer           = []
     this.ref                  = 0
+    this.messageCallbackRef   = 0
     this.timeout              = opts.timeout || DEFAULT_TIMEOUT
     this.transport            = opts.transport || global.WebSocket || LongPoll
     this.defaultEncoder       = Serializer.encode
@@ -826,9 +827,31 @@ export class Socket {
 
   /**
    * Registers callbacks for connection message events
+   *
+   * Returns a ref counter, which can be used later to
+   * unsubscribe the exact event listener
+   *
+   * @example
+   * const ref = socket.onMessage(do_stuff)
+   * socket.clearMessage(ref)
+   *
    * @param {Function} callback
+   * @returns {integer} ref
    */
-  onMessage(callback){ this.stateChangeCallbacks.message.push(callback) }
+  onMessage(callback){
+    let ref = this.messageCallbackRef++
+    this.stateChangeCallbacks.message.push({callback, ref})
+    return ref
+  }
+
+  /**
+   * @param {integer} ref
+   */
+  clearMessage(ref){
+    this.stateChangeCallbacks.message = this.stateChangeCallbacks.message.filter((bind) => {
+      return !(typeof ref === "undefined" || ref === bind.ref)
+    })
+  }
 
   /**
    * @private
@@ -983,7 +1006,7 @@ export class Socket {
       }
 
       for (let i = 0; i < this.stateChangeCallbacks.message.length; i++) {
-        this.stateChangeCallbacks.message[i](msg)
+        this.stateChangeCallbacks.message[i].callback(msg)
       }
     })
   }
